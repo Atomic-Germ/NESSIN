@@ -70,7 +70,7 @@ jobs:
         run: |
           set -eux
           mkdir -p logs
-          mednafen -qtrecord "logs/mednafen_record.mov" "hello.nes" &> "mednafen.log.txt" &
+          mednafen -qtrecord "logs/mednafen_record.mov" "artifacts/test.nes" &> "mednafen.log.txt" &
             MFPID=$!
             sleep 2
             kill $MFPID || true
