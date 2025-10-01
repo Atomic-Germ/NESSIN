@@ -9,30 +9,32 @@ on:
 
 jobs:
   build-and-capture:
+    name: macOS build & capture
     runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies (macOS)
-        uses: amitie10g/install-package@v1.2.5
-        with:
-          brew: ffmpeg imagemagick xxd mednafen cc65 zsh
+      - name: Install dependencies
+        run: |
+          brew install ffmpeg imagemagick xxd mednafen cc65 zsh
 
       - name: Ensure artifacts dir
-        run: mkdir -p nes-ide/artifacts nes-ide/tmp
+        working-directory: ${{ github.workspace }}
+        run: mkdir -p nes-ide/{artifacts,tmp}
 
       - name: Build example (cl65)
-        working-directory: nes-ide/examples/hello-world
+        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
         run: |
           make clean
           make -j1
 
       - name: Run Mednafen (record) and capture
+        working-directory: nes-ide/examples/hello-world
+        env:
+          MEDNAFEN_HOME: ${{ github.workspace }}/nes-ide/tmp/nes-ide_mednafen_home_ci
         run: |
           set -eux
-          cd nes-ide/examples/hello-world
-          export MEDNAFEN_HOME=$(pwd)/../../tmp/nes-ide_mednafen_home_ci
           mkdir -p "$MEDNAFEN_HOME"
           if command -v mednafen >/dev/null 2>&1; then
             # On macOS runners, mednafen uses native windowing; record to file using -qtrecord
@@ -46,10 +48,13 @@ jobs:
           fi
 
       - name: Extract frame with ffmpeg if movie present
+        env:
+          MOVIE: ${{ github.workspace }}/nes-ide/tmp/nes-ide_mednafen_home_ci/mednafen_record.mov
+          SNAPSHOT: ${{ github.workspace }}/nes-ide/artifacts/hello_mednafen_snapshot.png
+        working-directory: nes-ide/artifacts
         run: |
-          MOVIE=$(ls -1 ../../tmp/nes-ide_mednafen_home_ci/mednafen_record.mov 2>/dev/null || true)
           if [[ -n "$MOVIE" && -f "$MOVIE" ]]; then
-            ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 ../../artifacts/hello_mednafen_snapshot.png || true
+            ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 "$SNAPSHOT" || true
           fi
 
       - name: Upload artifacts
