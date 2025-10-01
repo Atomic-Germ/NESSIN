@@ -1,4 +1,4 @@
-name: Roll & Smoke Test (macOS)
+name: Roll & Smoke Rom Test
 
 on:
   push:
@@ -8,15 +8,37 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  build-and-capture:
-    name: macOS build & capture
+  build-test-rom:
+    name: Roll
     runs-on: macos-latest
-    env:
-      LOGS: ${{ github.workspace }}/logs
-      ARTIFACTS: ${{ github.workspace }}/artifacts
-      HELLO_WORLD_ROM: ${{ github.workspace }}/nes-ide/examples/hello-world/hello.nes
-      TMP: ${{ github.workspace }}/tmp
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4 
+
+      - name: Install Dependencies with brew
+        run: |
+          brew install cc65 zsh bash
+
+      - name: Build example (cl65)
+        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
+        run: |
+          make -j1
+          mkdir -p ${{ github.workspace }}/artifacts
+          mv hello.nes ${{ github.workspace }}/artifacts/test.nes
+
+      - name: Upload built ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: test.nes
+          if-no-files-found: error
+          retention-days: 1
+          path: ${{ github.workspace }}/artifacts/test.nes
+
+  test-built-rom:
+    name: Smoke
+    runs-on: macos-latest
+    needs: build-test-rom
+    steps: 
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -27,65 +49,53 @@ jobs:
           architecture: x64
           linking-type: static
           github-token: ${{ secrets.GITHUB_TOKEN }}   
-          
-      - name: Setup ImageMagick
-        uses: mfinelli/setup-imagemagick@v7.0.1
 
       - name: Install remaining dependencies with brew
         run: |
-          brew install mednafen cc65 zsh
+          brew install mednafen zsh bash
 
       - name: Ensure artifacts dir
         working-directory: ${{ github.workspace }}
-        run: mkdir -p {artifacts,logs,tmp}
+        run: mkdir -p {logs,artifacts}
 
-      - name: Build example (cl65)
-        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
-        run: make -j1
+      - name: Download Built ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: test.nes
+          path: ${{ github.workspace }}
 
-      - name: Run Mednafen (record) and capture
-        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
+      - name: Run Mednafen capture
+        working-directory: ${{ github.workspace }}
         run: |
-          set -eux
-          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" "$HELLO_WORLD_ROM" &> "$LOGS/mednafen.log.txt" &
+          zsh -c 'set -eux
+          mkdir -p logs
+          mednafen -qtrecord "logs/mednafen_record.mov" "hello.nes" &> "mednafen.log.txt" &
             MFPID=$!
             sleep 2
             kill $MFPID || true
-            wait $MFPID || true
+            wait $MFPID || true'
 
-      - name: Extract frame with ffmpeg if movie present
-        env:
-          MOVIE: $ARTIFACTS/mednafen_record.mov
-          SNAPSHOT: $ARTIFACTS/mednafen_snapshot.png
-        working-directory: ${{ github.workspace }}/artifacts/
-        run: |
-          if [[ -n "$MOVIE" && -f "$MOVIE" ]]; then
-            ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 "$SNAPSHOT" || true
-          fi
-      
-      - name: Package Artifacts & Logs
+      - name: Zip logs and artifacts
+        working-directory: ${{ github.workspace }}
         run: |
           set -eux
-          find . -type f ! -name "*.tar.gz" | tar -czf $LOG/logs.tar.gz -T - || true
-          if [[ ! -s $LOGS/logs.tar.gz ]]; then
+          cd logs
+          find . -type f ! -name "*.tar.gz" | tar -czf "logs.tar.gz" -T - || true
+          if [[ ! -s "logs.tar.gz" ]]; then
             echo "No log files found"
-          fi || cd $ARTIFACTS
-          find . -type f ! -name "*.tar.gz" | tar -czf $ARTIFACTS/artifacts.tar.gz -T - || true
-          if [[ ! -s $ARTIFACTS/artifacts.tar.gz ]]; then
+          fi || cd ../artifacts
+          find . -type f ! -name "*.tar.gz" | tar -czf "artifacts.tar.gz" -T - || true
+          if [[ ! -s "artifacts.tar.gz" ]]; then
             echo "No artifact files found"
           fi || true
-
-      - name: Upload logs
+            
+          
+      - name: Upload Artifacts & Logs
         uses: actions/upload-artifact@v4
         with:
-          name: logs
-          path: $LOGS/logs.tar.gz
-          if-no-files-found: error
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts
-          path: $ARTIFACTS/artifacts.tar.gz
+          name: artifacts-and-logs
+          path: |
+            ${{ github.workspace }}/artifacts/*.tar.gz
+            ${{ github.workspace }}/logs/*.tar.gz
           if-no-files-found: error
           retention-days: 5
