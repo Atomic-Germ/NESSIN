@@ -1,4 +1,4 @@
-name: CI - build & smoke
+name: Roll & Smoke Test (macOS)
 
 on:
   push:
@@ -14,6 +14,7 @@ jobs:
     env:
       LOGS: ${{ github.workspace }}/logs
       ARTIFACTS: ${{ github.workspace }}/artifacts
+      HELLO_WORLD_ROM: ${{ github.workspace }}/nes-ide/examples/hello-world/hello.nes
       TMP: ${{ github.workspace }}/tmp
     steps:
       - name: Checkout
@@ -36,21 +37,17 @@ jobs:
 
       - name: Ensure artifacts dir
         working-directory: ${{ github.workspace }}
-        run: mkdir -p artifacts logs tmp
+        run: mkdir -p {artifacts,logs,tmp}
 
       - name: Build example (cl65)
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
-        run: |
-          make clean
-          make -j1
+        run: make -j1
 
       - name: Run Mednafen (record) and capture
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
-        env:
-          MEDNAFEN_HOME: ${{ github.workspace }}/tmp
         run: |
           set -eux
-          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" hello.nes &> "$LOGS/mednafen.log" &
+          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" "$HELLO_WORLD_ROM" &> "$LOGS/mednafen.log" &
             MFPID=$!
             sleep 2
             kill $MFPID || true
