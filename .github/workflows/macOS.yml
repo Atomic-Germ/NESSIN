@@ -17,12 +17,12 @@ jobs:
 
       - name: Install Dependencies with brew
         run: |
-          brew install cc65 zsh bash
+          brew install cc65 bash mednafen
 
       - name: Build example (cl65)
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
         run: |
-          make -j1
+          make -j1 && mednafen hello.nes | grep "Unrecognized file format" || false
           mkdir -p ${{ github.workspace }}/artifacts
           mv hello.nes ${{ github.workspace }}/artifacts/test.nes
 
