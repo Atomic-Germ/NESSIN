@@ -1,0 +1,115 @@
+name: MacOS
+
+on:
+  push:
+    branches: [ develop/** ]
+  pull_request:
+    branches: [ main , develop ]
+  workflow_dispatch: {}
+
+jobs:
+  build-test-rom:
+    name: Roll
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4 
+
+      - name: Install Dependencies with brew
+        run: |
+          brew install cc65 bash mednafen
+
+      - name: Build example (cl65)
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          ./test_build.sh
+          cp test.nes artifacts/test.nes
+          cp test.chr artifacts/test.chr || true
+          # Collect mednafen log if present (latest tmp dir)
+          LAST_TMP=$(ls -td ./tmp/test_build_* 2>/dev/null | head -1 || true)
+          if [ -n "$LAST_TMP" ] && [ -f "$LAST_TMP/mednafen.log" ]; then
+            # Suppress verbose SwiftResampler lines
+            grep -v 'SwiftResampler.cpp debug info' "$LAST_TMP/mednafen.log" > artifacts/mednafen.log || cp "$LAST_TMP/mednafen.log" artifacts/mednafen.log
+            cp "$LAST_TMP/test.nes" artifacts/test.raw.nes || true
+            cp "$LAST_TMP/hello.tmp.nes" artifacts/hello.tmp.nes || true
+          fi
+
+      - name: Upload built ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            ${{ github.workspace }}/artifacts/test.nes
+            ${{ github.workspace }}/artifacts/test.raw.nes
+            ${{ github.workspace }}/artifacts/hello.tmp.nes
+            ${{ github.workspace }}/artifacts/mednafen.log
+            ${{ github.workspace }}/artifacts/test.chr
+
+  test-built-rom:
+    name: Smoke
+    runs-on: macos-latest
+    needs: build-test-rom
+    steps: 
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup FFmpeg
+        uses: federicocarboni/setup-ffmpeg@v3.1
+        with:
+          ffmpeg-version: release
+          architecture: x64
+          linking-type: static
+          github-token: ${{ secrets.GITHUB_TOKEN }}   
+
+      - name: Install remaining dependencies with brew
+        run: |
+          brew install mednafen zsh bash
+
+      - name: Ensure artifacts dir
+        working-directory: ${{ github.workspace }}
+        run: mkdir -p {logs,artifacts}
+
+      - name: Download Built ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ${{ github.workspace }}
+
+      - name: Run Mednafen capture
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -eux
+          mkdir -p logs
+          mednafen -qtrecord "logs/mednafen_record.mov" "artifacts/test.nes" 2>&1 | grep -v 'SwiftResampler.cpp debug info' > "mednafen.log.txt" &
+            MFPID=$!
+            sleep 2
+            kill $MFPID || true
+            wait $MFPID || true
+
+      - name: Zip logs and artifacts
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -eux
+          cd logs
+          find . -type f ! -name "*.tar.gz" | tar -czf "logs.tar.gz" -T - || true
+          if [[ ! -s "logs.tar.gz" ]]; then
+            echo "No log files found"
+          fi || cd ../artifacts
+          find . -type f ! -name "*.tar.gz" | tar -czf "artifacts.tar.gz" -T - || true
+          if [[ ! -s "artifacts.tar.gz" ]]; then
+            echo "No artifact files found"
+          fi || true
+            
+          
+      - name: Upload Artifacts & Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-and-logs
+          path: |
+            ${{ github.workspace }}/artifacts/*.tar.gz
+            ${{ github.workspace }}/logs/*.tar.gz
+          if-no-files-found: error
+          retention-days: 5
