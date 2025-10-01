@@ -47,7 +47,7 @@ jobs:
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
         run: |
           set -eux
-          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" "$HELLO_WORLD_ROM" &> "$LOGS/mednafen.log" &
+          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" "$HELLO_WORLD_ROM" &> "$LOGS/mednafen.log.txt" &
             MFPID=$!
             sleep 2
             kill $MFPID || true
@@ -63,22 +63,16 @@ jobs:
             ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 "$SNAPSHOT" || true
           fi
       
-      - name: Package artifacts
-        working-directory: $ARTIFACTS
+      - name: Package Artifacts & Logs
         run: |
           set -eux
-          find . -type f ! -name "*.tar.gz" | tar -czf artifacts.tar.gz -T - || true
-          if [[ ! -s artifacts.tar.gz ]]; then
-            echo "No artifact files found"
-          fi || true
-
-      - name: Package logs
-        working-directory: $LOGS
-        run: |
-          set -eux
-          find . -type f ! -name "*.tar.gz" | tar -czf logs.tar.gz -T - || true
-          if [[ ! -s logs.tar.gz ]]; then
+          find . -type f ! -name "*.tar.gz" | tar -czf $LOG/logs.tar.gz -T - || true
+          if [[ ! -s $LOGS/logs.tar.gz ]]; then
             echo "No log files found"
+          fi || cd $ARTIFACTS
+          find . -type f ! -name "*.tar.gz" | tar -czf $ARTIFACTS/artifacts.tar.gz -T - || true
+          if [[ ! -s $ARTIFACTS/artifacts.tar.gz ]]; then
+            echo "No artifact files found"
           fi || true
 
       - name: Upload logs
