@@ -1,4 +1,7 @@
-.github/chatmodes
-.github/instructions
-.github/prompts
-snes-ide
+.github/chatmodes/
+.github/instructions/
+.github/prompts/
+snes-ide/
+nes-ide/artifacts/
+tmp/
+**/tmp/
