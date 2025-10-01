@@ -15,9 +15,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Setup FFmpeg
+        uses: federicocarboni/setup-ffmpeg@v3.1
+        with:
+          ffmpeg-version: release
+          architecture: x64
+          linking-type: static
+          github-token: ${{ secrets.GITHUB_TOKEN }}   
+          
+      - name: Setup ImageMagick
+        uses: mfinelli/setup-imagemagick@v7.0.1
+
+      - name: Install dependencies with brew
         run: |
-          brew install ffmpeg imagemagick xxd mednafen cc65 zsh
+          brew install mednafen cc65 zsh
 
       - name: Ensure artifacts dir
         working-directory: ${{ github.workspace }}
@@ -30,9 +41,9 @@ jobs:
           make -j1
 
       - name: Run Mednafen (record) and capture
-        working-directory: nes-ide/examples/hello-world
+        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
         env:
-          MEDNAFEN_HOME: ${{ github.workspace }}/nes-ide/tmp/nes-ide_mednafen_home_ci
+          MEDNAFEN_HOME: ${{ github.workspace }}/tmp/nes-ide_mednafen_home_ci
         run: |
           set -eux
           mkdir -p "$MEDNAFEN_HOME"
@@ -49,9 +60,9 @@ jobs:
 
       - name: Extract frame with ffmpeg if movie present
         env:
-          MOVIE: ${{ github.workspace }}/nes-ide/tmp/nes-ide_mednafen_home_ci/mednafen_record.mov
-          SNAPSHOT: ${{ github.workspace }}/nes-ide/artifacts/hello_mednafen_snapshot.png
-        working-directory: nes-ide/artifacts
+          MOVIE: ${{ github.workspace }}/tmp/nes-ide_mednafen_home_ci/mednafen_record.mov
+          SNAPSHOT: ${{ github.workspace }}/artifacts/hello_mednafen_snapshot.png
+        working-directory: ${{ github.workspace }}/nes-ide/artifacts
         run: |
           if [[ -n "$MOVIE" && -f "$MOVIE" ]]; then
             ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 "$SNAPSHOT" || true
@@ -60,5 +71,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nes-ide-artifacts
-          path: nes-ide/artifacts/
+          name: artifacts
+          path: ${{ github.workspace }}/artifacts/*
+          retention-days: 5
