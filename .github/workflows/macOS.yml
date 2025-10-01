@@ -24,16 +24,29 @@ jobs:
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
           ./test_build.sh
-          mv test.nes artifacts/test.nes
-          mv test.chr artifacts/test.chr
+          cp test.nes artifacts/test.nes
+          cp test.chr artifacts/test.chr || true
+          # Collect mednafen log if present (latest tmp dir)
+          LAST_TMP=$(ls -td ./tmp/test_build_* 2>/dev/null | head -1 || true)
+          if [ -n "$LAST_TMP" ] && [ -f "$LAST_TMP/mednafen.log" ]; then
+            # Suppress verbose SwiftResampler lines
+            grep -v 'SwiftResampler.cpp debug info' "$LAST_TMP/mednafen.log" > artifacts/mednafen.log || cp "$LAST_TMP/mednafen.log" artifacts/mednafen.log
+            cp "$LAST_TMP/test.nes" artifacts/test.raw.nes || true
+            cp "$LAST_TMP/hello.tmp.nes" artifacts/hello.tmp.nes || true
+          fi
 
       - name: Upload built ROM
         uses: actions/upload-artifact@v4
         with:
-          name: test.nes
+          name: build-artifacts
           if-no-files-found: error
           retention-days: 1
-          path: ${{ github.workspace }}/artifacts/test.nes
+          path: |
+            ${{ github.workspace }}/artifacts/test.nes
+            ${{ github.workspace }}/artifacts/test.raw.nes
+            ${{ github.workspace }}/artifacts/hello.tmp.nes
+            ${{ github.workspace }}/artifacts/mednafen.log
+            ${{ github.workspace }}/artifacts/test.chr
 
   test-built-rom:
     name: Smoke
@@ -62,7 +75,7 @@ jobs:
       - name: Download Built ROM
         uses: actions/download-artifact@v4
         with:
-          name: test.nes
+          name: build-artifacts
           path: ${{ github.workspace }}
 
       - name: Run Mednafen capture
@@ -70,7 +83,7 @@ jobs:
         run: |
           set -eux
           mkdir -p logs
-          mednafen -qtrecord "logs/mednafen_record.mov" "artifacts/test.nes" &> "mednafen.log.txt" &
+          mednafen -qtrecord "logs/mednafen_record.mov" "artifacts/test.nes" 2>&1 | grep -v 'SwiftResampler.cpp debug info' > "mednafen.log.txt" &
             MFPID=$!
             sleep 2
             kill $MFPID || true

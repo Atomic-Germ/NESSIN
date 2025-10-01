@@ -26,7 +26,37 @@ cp "$TMPDIR/test.nes" "$REPO_ROOT/test.nes" || true
 echo "Running mednafen against $TMPDIR/test.nes (mednafen.log -> $TMPDIR/mednafen.log)"
 MEDNAFEN_LOG="$TMPDIR/mednafen.log"
 if command -v mednafen >/dev/null 2>&1; then
-	mednafen "$TMPDIR/test.nes" &> "$MEDNAFEN_LOG" || true
+	# Launch mednafen in the background and monitor log for successful load lines.
+	mednafen "$TMPDIR/test.nes" > "$MEDNAFEN_LOG" 2>&1 &
+	MEDNAFEN_PID=$!
+	LOAD_TIMEOUT=10  # seconds
+	START_TIME=$(date +%s)
+	SUCCESS=0
+	# Poll the log until we see PRG ROM line or timeout
+	while (( $(date +%s) - START_TIME < LOAD_TIMEOUT )); do
+		if grep -qE 'PRG ROM:' "$MEDNAFEN_LOG"; then
+			SUCCESS=1
+			break
+		fi
+		if ! kill -0 $MEDNAFEN_PID 2>/dev/null; then
+			break
+		fi
+		sleep 0.2
+	done
+	if (( SUCCESS == 1 )); then
+		echo "Detected successful mednafen load (PRG ROM line)."
+		if [[ -z "${KEEP_MEDNAFEN:-}" ]]; then
+			kill $MEDNAFEN_PID 2>/dev/null || true
+			wait $MEDNAFEN_PID 2>/dev/null || true
+		else
+			echo "KEEP_MEDNAFEN set; leaving mednafen running (pid $MEDNAFEN_PID)."
+		fi
+	else
+		echo "Did not detect successful mednafen load within ${LOAD_TIMEOUT}s (pid $MEDNAFEN_PID)." >&2
+		# Attempt graceful termination
+		kill $MEDNAFEN_PID 2>/dev/null || true
+		wait $MEDNAFEN_PID 2>/dev/null || true
+	fi
 else
 	echo "mednafen not found on PATH; skipping emulation run" > "$MEDNAFEN_LOG"
 fi
