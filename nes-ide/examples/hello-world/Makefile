@@ -21,6 +21,10 @@ $(CHR_BIN):
 
 # Build final iNES by linking with cl65 then replacing/embedding CHR (keeps PRG size as produced)
 $(INES): $(SRC) $(CHR_BIN)
+
+.ONESHELL:
+SHELL := /bin/zsh
+
 	cl65 -t nes -o $(TARGET).tmp.nes $(SRC)
 	# Read PRG bank count from tmp.nes header (byte 4)
 	hex=$$(xxd -p -s 4 -l1 $(TARGET).tmp.nes)
