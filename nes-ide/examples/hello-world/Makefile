@@ -13,14 +13,12 @@ clean:
 	rm -f $(INES) $(PRG_BIN) $(CHR_BIN)
 
 
-# Create an 8KB CHR image: populate first tile with our pattern, rest zeros
+# Build CHR: create an 8KB CHR where the first 16 bytes are a demo tile
 $(CHR_BIN):
-	# Create a simple 8KB CHR with the first 16 bytes set to the demo tile
-	# Write the 16-byte pattern then pad to 8192 bytes
 	printf '\xFF\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\x00\xFF\x00\xFF\x00\xFF' > $(CHR_BIN)
 	dd if=/dev/zero bs=1 count=$$((8192 - 16)) >> $(CHR_BIN) 2>/dev/null || true
 
-# Build final iNES by linking with cl65 then replacing/embedding CHR (keeps PRG size as produced)
+# Build final iNES in a single shell so variable assignments persist
 .ONESHELL:
 SHELL := /bin/zsh
 
@@ -29,16 +27,13 @@ $(INES): $(SRC) $(CHR_BIN)
 	# Read PRG bank count from tmp.nes header (byte 4)
 	hex=$$(xxd -p -s 4 -l1 $(TARGET).tmp.nes)
 	prg_banks=$$((0x$${hex}))
-	# Build header (NES 0x1A, PRG count, CHR count = 1, flags 6-15 = 0)
 	prg_hex=$$(printf '%02x' $$prg_banks)
-	# header hex: 4e45531a + prg_hex + chr=01 + 10 bytes zeros
 	zeros=$$(printf '%020s' | tr ' ' '0')
 	header_hex="4e45531a$${prg_hex}01$${zeros}"
 	echo "$${header_hex}" | xxd -r -p > $(INES)
-	# Append PRG (skip 16-byte header) and our CHR
 	tail -c +17 $(TARGET).tmp.nes >> $(INES)
 	cat $(CHR_BIN) >> $(INES)
-	# Sanity check: final .nes should begin with 'NES<EOF>' (4E 45 53 1A)
+	# Sanity: ensure iNES header present
 	first4=$$(xxd -p -l4 $(INES) | tr -d '\n')
 	if [ "$$first4" != "4e45531a" ]; then
 		echo "Error: $(INES) does not start with iNES header (found: $$first4)" >&2
