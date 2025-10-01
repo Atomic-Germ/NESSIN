@@ -11,6 +11,10 @@ jobs:
   build-and-capture:
     name: macOS build & capture
     runs-on: macos-latest
+    env:
+      LOGS: ${{ github.workspace }}/logs
+      ARTIFACTS: ${{ github.workspace }}/artifacts
+      TMP: ${{ github.workspace }}/tmp
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,13 +30,13 @@ jobs:
       - name: Setup ImageMagick
         uses: mfinelli/setup-imagemagick@v7.0.1
 
-      - name: Install dependencies with brew
+      - name: Install remaining dependencies with brew
         run: |
           brew install mednafen cc65 zsh
 
       - name: Ensure artifacts dir
         working-directory: ${{ github.workspace }}
-        run: mkdir -p nes-ide/{artifacts,tmp}
+        run: mkdir -p artifacts logs tmp
 
       - name: Build example (cl65)
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
@@ -43,34 +47,54 @@ jobs:
       - name: Run Mednafen (record) and capture
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
         env:
-          MEDNAFEN_HOME: ${{ github.workspace }}/tmp/nes-ide_mednafen_home_ci
+          MEDNAFEN_HOME: ${{ github.workspace }}/tmp
         run: |
           set -eux
-          mkdir -p "$MEDNAFEN_HOME"
-          if command -v mednafen >/dev/null 2>&1; then
-            # On macOS runners, mednafen uses native windowing; record to file using -qtrecord
-            mednafen -qtrecord "$MEDNAFEN_HOME/mednafen_record.mov" hello.nes &> "$MEDNAFEN_HOME/mednafen.log" &
+          mednafen -qtrecord "$ARTIFACTS/mednafen_record.mov" hello.nes &> "$LOGS/mednafen.log" &
             MFPID=$!
             sleep 2
             kill $MFPID || true
             wait $MFPID || true
-          else
-            echo "mednafen not available on runner"
-          fi
 
       - name: Extract frame with ffmpeg if movie present
         env:
-          MOVIE: ${{ github.workspace }}/tmp/nes-ide_mednafen_home_ci/mednafen_record.mov
-          SNAPSHOT: ${{ github.workspace }}/artifacts/hello_mednafen_snapshot.png
-        working-directory: ${{ github.workspace }}/nes-ide/artifacts
+          MOVIE: $ARTIFACTS/mednafen_record.mov
+          SNAPSHOT: $ARTIFACTS/mednafen_snapshot.png
+        working-directory: ${{ github.workspace }}/artifacts/
         run: |
           if [[ -n "$MOVIE" && -f "$MOVIE" ]]; then
             ffmpeg -y -i "$MOVIE" -frames:v 1 -q:v 2 "$SNAPSHOT" || true
           fi
+      
+      - name: Package artifacts
+        working-directory: $ARTIFACTS
+        run: |
+          set -eux
+          find . -type f ! -name "*.tar.gz" | tar -czf artifacts.tar.gz -T - || true
+          if [[ ! -s artifacts.tar.gz ]]; then
+            echo "No artifact files found"
+          fi || true
+
+      - name: Package logs
+        working-directory: $LOGS
+        run: |
+          set -eux
+          find . -type f ! -name "*.tar.gz" | tar -czf logs.tar.gz -T - || true
+          if [[ ! -s logs.tar.gz ]]; then
+            echo "No log files found"
+          fi || true
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: $LOGS/logs.tar.gz
+          if-no-files-found: error
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artifacts
-          path: ${{ github.workspace }}/artifacts/*
+          path: $ARTIFACTS/artifacts.tar.gz
+          if-no-files-found: error
           retention-days: 5
