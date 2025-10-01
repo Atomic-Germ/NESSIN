@@ -14,11 +14,17 @@ clean:
 	rm -f $(INES) $(PRG_BIN) $(CHR_BIN) $(TARGET).tmp.nes $(INES).tmp
 
 
-# Create an 8KB CHR image: populate first tile with our pattern, rest zeros
+# Create an 8KB CHR image: three tiles then padding
+# Tile 0: original checker style; Tile 1: inverted; Tile 2: solid block (sprite)
 $(CHR_BIN):
-	# Write a 16-byte demo tile then pad to 8192 bytes
+	# Tile 0
 	printf '\xFF\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\x00\xFF\x00\xFF\x00\xFF' > $(CHR_BIN)
-	dd if=/dev/zero bs=1 count=$$((8192 - 16)) >> $(CHR_BIN) 2>/dev/null || true
+	# Tile 1 (invert planes)
+	printf '\x00\xFF\x00\xFF\x00\xFF\x00\xFF\xFF\x00\xFF\x00\xFF\x00\xFF\x00' >> $(CHR_BIN)
+	# Tile 2 (solid square: plane0=FF plane1=FF)
+	printf '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF' >> $(CHR_BIN)
+	# Pad remainder to 8192 bytes
+	dd if=/dev/zero bs=1 count=$$((8192 - 48)) >> $(CHR_BIN) 2>/dev/null || true
 
 # Ensure the recipe runs in a single shell (zsh) so variables persist
 .ONESHELL:
