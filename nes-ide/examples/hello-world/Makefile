@@ -36,8 +36,7 @@ $(INES): $(SRC) $(CHR_BIN)
 	header_hex="4e45531a$${prg_hex}01$${zeros}"
 	echo "$${header_hex}" | xxd -r -p > $(INES)
 	# Append PRG (skip 16-byte header) and our CHR
-	# Use tail to copy everything after the 16-byte iNES header reliably
-	tail -c +17 $(TARGET).tmp.nes >> $(INES) 2>/dev/null || true
+	tail -c +17 $(TARGET).tmp.nes >> $(INES)
 	cat $(CHR_BIN) >> $(INES)
 	# Sanity check: final .nes should begin with 'NES<EOF>' (4E 45 53 1A)
 	first4=$$(xxd -p -l4 $(INES) | tr -d '\n')
