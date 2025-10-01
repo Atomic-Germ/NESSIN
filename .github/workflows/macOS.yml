@@ -20,11 +20,12 @@ jobs:
           brew install cc65 bash mednafen
 
       - name: Build example (cl65)
-        working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
+        working-directory: ${{ github.workspace }}
         run: |
-          make -j1 && mednafen hello.nes | grep "Unrecognized file format" || false
           mkdir -p ${{ github.workspace }}/artifacts
-          mv hello.nes ${{ github.workspace }}/artifacts/test.nes
+          ./test_build.sh
+          mv test.nes artifacts/test.nes
+          mv test.chr artifacts/test.chr
 
       - name: Upload built ROM
         uses: actions/upload-artifact@v4

@@ -1,4 +1,4 @@
-#!/usr/bin/env make
+#!/bin/make -f
 TARGET = hello
 SRC = src/main.c src/nes_stubs.c
 
