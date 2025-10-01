@@ -1,3 +1,4 @@
+
 #!/bin/make -f
 TARGET = hello
 SRC = src/main.c src/nes_stubs.c
@@ -39,11 +40,11 @@ $(INES): $(SRC) $(CHR_BIN)
 	tail -c +17 $(TARGET).tmp.nes >> $(INES) 2>/dev/null || true
 	cat $(CHR_BIN) >> $(INES)
 	# Sanity check: final .nes should begin with 'NES<EOF>' (4E 45 53 1A)
-	first4=$$(xxd -p -l4 $(INES) | tr -d '\n'); \
-	if [ "$$first4" != "4e45531a" ]; then \
-		echo "Error: $(INES) does not start with iNES header (found: $$first4)" >&2; \
-		exit 1; \
-	fi; \
+	first4=$$(xxd -p -l4 $(INES) | tr -d '\n')
+	if [ "$$first4" != "4e45531a" ]; then
+		echo "Error: $(INES) does not start with iNES header (found: $$first4)" >&2
+		exit 1
+	fi
 	rm -f $(TARGET).tmp.nes
 
 .PHONY: all clean
