@@ -1,4 +1,4 @@
-name: MacOS
+name: Ubuntu
 
 on:
   push:
@@ -10,14 +10,15 @@ on:
 jobs:
   build-test-rom:
     name: Roll
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4 
 
-      - name: Install Dependencies with brew
+      - name: Install Dependencies with apt
         run: |
-          brew install cc65 zsh bash
+          sudo apt update
+          sudo apt install -y cc65 zsh bash
 
       - name: Build example (cl65)
         working-directory: ${{ github.workspace }}/nes-ide/examples/hello-world
@@ -50,9 +51,10 @@ jobs:
           linking-type: static
           github-token: ${{ secrets.GITHUB_TOKEN }}   
 
-      - name: Install remaining dependencies with brew
+      - name: Install remaining dependencies with apt
         run: |
-          brew install mednafen zsh bash
+          sudo apt update
+          sudo apt install -y mednafen zsh bash
 
       - name: Ensure artifacts dir
         working-directory: ${{ github.workspace }}
